@@ -13,6 +13,10 @@ It runs on your machine. Nothing is uploaded. No account.
 ![Platforms](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-supported-10b981)
 ![Local only](https://img.shields.io/badge/local--only-nothing%20uploaded-22c55e)
 
+<br>
+
+<img src="https://raw.githubusercontent.com/MalyStern/lastgood/main/docs/demo.svg" alt="LastGood: mark a working state, git pull, then lastgood morning shows the changed lockfile, new migration and new env var — with fix commands" width="760">
+
 </div>
 
 ---

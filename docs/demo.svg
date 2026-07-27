@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 490" font-family="ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, Consolas, monospace" font-size="14.5">
+  <rect width="820" height="490" rx="10" fill="#0d1117"/>
+  <rect width="820" height="34" rx="10" fill="#161b22"/>
+  <rect y="24" width="820" height="10" fill="#161b22"/>
+  <circle cx="20" cy="17" r="6" fill="#ff5f56"/>
+  <circle cx="40" cy="17" r="6" fill="#ffbd2e"/>
+  <circle cx="60" cy="17" r="6" fill="#27c93f"/>
+  <text x="410" y="21" fill="#8b949e" font-size="12" text-anchor="middle">lastgood — zsh</text>
+  <text x="22" y="52" xml:space="preserve"><tspan fill="#7ee787">$ </tspan><tspan fill="#c9d1d9">lastgood mark</tspan><tspan fill="#8b949e">   # project works — save the good state</tspan></text>
+  <text x="22" y="74" xml:space="preserve"><tspan fill="#3fb950">Saved the current state as last-good.</tspan></text>
+  <text x="22" y="96" xml:space="preserve"><tspan fill="#7ee787">$ </tspan><tspan fill="#c9d1d9">git pull</tspan><tspan fill="#8b949e">   # ... a teammate bumped deps + added a migration</tspan></text>
+  <text x="22" y="118" xml:space="preserve"><tspan fill="#7ee787">$ </tspan><tspan fill="#c9d1d9">lastgood morning</tspan></text>
+  <text x="22" y="140" xml:space="preserve"></text>
+  <text x="22" y="162" xml:space="preserve"><tspan fill="#f0f6fc" font-weight="700">LastGood — what changed since your project last worked</tspan></text>
+  <text x="22" y="184" xml:space="preserve"><tspan fill="#8b949e">Last worked: today 09:15 (manual-mark)</tspan></text>
+  <text x="22" y="206" xml:space="preserve"></text>
+  <text x="22" y="228" xml:space="preserve"><tspan fill="#ff7b72" font-weight="700">  ✖ blocking</tspan><tspan fill="#c9d1d9">  package-lock.json changed since your last-good state</tspan></text>
+  <text x="22" y="250" xml:space="preserve"><tspan fill="#8b949e">      Run: </tspan><tspan fill="#f0f6fc" font-weight="700">npm install</tspan></text>
+  <text x="22" y="272" xml:space="preserve"></text>
+  <text x="22" y="294" xml:space="preserve"><tspan fill="#ff7b72" font-weight="700">  ✖ blocking</tspan><tspan fill="#c9d1d9">  1 prisma migration was added and may not be applied locally</tspan></text>
+  <text x="22" y="316" xml:space="preserve"><tspan fill="#8b949e">      Run: </tspan><tspan fill="#f0f6fc" font-weight="700">npx prisma migrate dev</tspan></text>
+  <text x="22" y="338" xml:space="preserve"></text>
+  <text x="22" y="360" xml:space="preserve"><tspan fill="#ff7b72" font-weight="700">  ✖ blocking</tspan><tspan fill="#c9d1d9">  1 new env var is expected: STRIPE_KEY</tspan></text>
+  <text x="22" y="382" xml:space="preserve"></text>
+  <text x="22" y="404" xml:space="preserve"><tspan fill="#f0f6fc" font-weight="700">Run these to get going:</tspan></text>
+  <text x="22" y="426" xml:space="preserve"><tspan fill="#3fb950">  npm install</tspan></text>
+  <text x="22" y="448" xml:space="preserve"><tspan fill="#3fb950">  npx prisma migrate dev</tspan></text>
+</svg>
