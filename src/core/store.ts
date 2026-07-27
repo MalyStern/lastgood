@@ -7,6 +7,27 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Fingerprint } from './types.js'
+import { SCHEMA_VERSION } from './types.js'
+
+/** A parsed object is only a usable fingerprint if it's the right schema version
+ * and has the container fields the diff engine iterates over — otherwise a stale,
+ * hand-edited or truncated file would crash later with a cryptic TypeError. */
+export function isValidFingerprint(x: unknown): x is Fingerprint {
+  if (!x || typeof x !== 'object') return false
+  const fp = x as Record<string, unknown>
+  return (
+    fp.schemaVersion === SCHEMA_VERSION &&
+    !!fp.git && typeof fp.git === 'object' &&
+    !!fp.lockfiles && typeof fp.lockfiles === 'object' &&
+    !!fp.runtimes && typeof fp.runtimes === 'object' &&
+    !!fp.envSchema && typeof fp.envSchema === 'object' &&
+    !!fp.migrations && typeof fp.migrations === 'object' &&
+    !!fp.fileHashes && typeof fp.fileHashes === 'object' &&
+    Array.isArray(fp.dockerServices) &&
+    Array.isArray(fp.ports) &&
+    typeof fp.createdAt === 'string'
+  )
+}
 
 export const DIR = '.lastgood'
 
@@ -41,7 +62,8 @@ export function readFingerprint(root: string): Fingerprint | null {
   const p = fingerprintPath(root)
   if (!existsSync(p)) return null
   try {
-    return JSON.parse(readFileSync(p, 'utf8')) as Fingerprint
+    const parsed = JSON.parse(readFileSync(p, 'utf8'))
+    return isValidFingerprint(parsed) ? parsed : null
   } catch {
     return null
   }
@@ -69,7 +91,8 @@ export function readPark(root: string): Fingerprint | null {
   const p = parkPath(root)
   if (!existsSync(p)) return null
   try {
-    return JSON.parse(readFileSync(p, 'utf8')) as Fingerprint
+    const parsed = JSON.parse(readFileSync(p, 'utf8'))
+    return isValidFingerprint(parsed) ? parsed : null
   } catch {
     return null
   }

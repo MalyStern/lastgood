@@ -1,6 +1,6 @@
 {
   "name": "lastgood",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "LastGood tells you exactly what changed since your project last worked on your machine. Mark a known-good state, then after a git pull or branch switch see what drifted — deps, migrations, env vars, runtime, services — with the exact commands to get running again. Local-first; nothing uploaded.",
   "type": "module",
   "bin": {

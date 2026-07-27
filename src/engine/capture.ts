@@ -120,7 +120,15 @@ function captureDockerServices(root: string): string[] {
   }
 }
 
-/** Host ports declared in compose port mappings + *PORT env keys. */
+/** Is this env key actually a port key? PORT must be a whole underscore-token,
+ * so SUPPORT / PASSPORT / EXPORT / TRANSPORT never match. */
+const isPortKey = (key: string): boolean => key.toUpperCase().split('_').includes('PORT')
+
+/**
+ * Host ports the project declares. Read ONLY from compose mappings and EXAMPLE env
+ * files — never the real .env. Example files hold placeholder values, not secrets;
+ * the real .env is never opened here, keeping the "values are never read" promise.
+ */
 export function capturePorts(root: string): number[] {
   const ports = new Set<number>()
   const composeName = ['docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml'].find((f) => has(root, f))
@@ -128,9 +136,13 @@ export function capturePorts(root: string): number[] {
     const c = read(join(root, composeName)) ?? ''
     for (const m of c.matchAll(/["'\s-](\d{2,5}):\d{2,5}["'\s]/g)) ports.add(Number(m[1]))
   }
-  for (const name of [...ENV_EXAMPLES, '.env']) {
-    const e = read(join(root, name)) ?? ''
-    for (const m of e.matchAll(/^(?:export\s+)?[A-Z0-9_]*PORT[A-Z0-9_]*\s*=\s*["']?(\d{2,5})/gm)) ports.add(Number(m[1]))
+  for (const name of ENV_EXAMPLES) {
+    const e = read(join(root, name))
+    if (!e) continue
+    for (const line of e.split(/\r?\n/)) {
+      const m = line.trim().match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*["']?(\d{1,5})\b/)
+      if (m && isPortKey(m[1]!)) ports.add(Number(m[2]))
+    }
   }
   return [...ports].filter((p) => p > 0 && p < 65536).sort((a, b) => a - b)
 }

@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { diffFingerprints } from '../src/core/diff.js'
 import { parseEnvKeys, capturePorts } from '../src/engine/capture.js'
 import { normalizeConfig } from '../src/core/config.js'
 import { exitCodeFor, worstOf } from '../src/core/result.js'
 import { generateContext } from '../src/core/context.js'
+import { isValidFingerprint } from '../src/core/store.js'
 import { detectLang, makeTranslator } from '../src/core/i18n.js'
 import type { Finding, Fingerprint } from '../src/core/types.js'
 
@@ -34,9 +38,35 @@ describe('parseEnvKeys', () => {
   })
 })
 
-describe('capturePorts (framework defaults path)', () => {
+describe('capturePorts (privacy)', () => {
   it('returns [] when no compose/env present under a bogus root', () => {
     expect(capturePorts('/definitely/not/a/real/path/xyz')).toEqual([])
+  })
+
+  it('NEVER reads the real .env, and matches PORT only as a whole token', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lg-ports-'))
+    try {
+      // A real .env with a genuine PORT and a secret whose key contains "PORT".
+      writeFileSync(join(dir, '.env'), 'PORT=9999\nSUPPORT_TOKEN=12345secret\n')
+      // The example only declares SERVER_PORT and a decoy secret-ish key.
+      writeFileSync(join(dir, '.env.example'), 'SERVER_PORT=3000\nPASSPORT_ID=54321\nDATABASE_URL=\n')
+      const ports = capturePorts(dir)
+      expect(ports).toContain(3000) // real port key in the example
+      expect(ports).not.toContain(9999) // came from the real .env — must be ignored
+      expect(ports).not.toContain(54321) // PASSPORT is not a PORT key
+      expect(ports).not.toContain(12345) // from .env, and not a PORT key anyway
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('isValidFingerprint', () => {
+  it('rejects malformed/stale objects and accepts a valid one', () => {
+    expect(isValidFingerprint({})).toBe(false)
+    expect(isValidFingerprint(null)).toBe(false)
+    expect(isValidFingerprint({ schemaVersion: 999, git: {} })).toBe(false)
+    expect(isValidFingerprint(fp())).toBe(true)
   })
 })
 
@@ -65,6 +95,21 @@ describe('diffFingerprints', () => {
       fp({ envSchema: { keys: ['A'], keysHash: '', sources: [] } }),
     )
     expect(removed.find((x) => x.detectorId === 'env_schema')?.severity).toBe('nice')
+  })
+
+  it('flags a runtime that disappeared as blocking', () => {
+    const f = diffFingerprints(fp({ runtimes: { node: '20.1.0' } }), fp({ runtimes: {} }))
+    const r = f.find((x) => x.detectorId === 'runtimes')!
+    expect(r.severity).toBe('blocking')
+    expect(r.title).toContain('not found')
+  })
+
+  it('flags a migration set swap (same count, different hash) as likely', () => {
+    const f = diffFingerprints(
+      fp({ migrations: { prisma: { files: 2, filesHash: 'aaa' } } }),
+      fp({ migrations: { prisma: { files: 2, filesHash: 'bbb' } } }),
+    )
+    expect(f.find((x) => x.detectorId === 'migrations')?.severity).toBe('likely')
   })
 
   it('flags an added migration as blocking', () => {

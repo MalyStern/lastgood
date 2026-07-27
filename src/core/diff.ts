@@ -79,6 +79,15 @@ export function diffFingerprints(lastGood: Fingerprint, current: Fingerprint): F
         title: `${rt} changed: ${before} at last-good, now ${after}`,
         fix: { title: `Switch ${rt} back to ${before}, or re-mark if the new version is intended`, command: RUNTIME_SWITCH[rt](before) },
       })
+    } else if (before && !after) {
+      // The runtime was present when it worked and is now gone — a real regression
+      // that the "what changed" tool must not miss.
+      findings.push({
+        detectorId: 'runtimes',
+        severity: 'blocking',
+        title: `${rt} was ${before} at last-good but is not found now`,
+        fix: { title: `Reinstall ${rt} ${before}`, command: RUNTIME_SWITCH[rt](before) },
+      })
     }
   }
 
@@ -126,6 +135,20 @@ export function diffFingerprints(lastGood: Fingerprint, current: Fingerprint): F
         title: `${tool} migration files decreased (${before} → ${after}) since last-good`,
         fix: { title: 'Check your branch — you may be behind or on a different history.' },
       })
+    } else if (after === before && after > 0) {
+      // Same count but a different set (a migration was renamed/replaced) — caught
+      // via the filenames hash so a swap isn't silently missed.
+      const hb = lastGood.migrations[tool]?.filesHash
+      const ha = current.migrations[tool]?.filesHash
+      if (hb && ha && hb !== ha) {
+        findings.push({
+          detectorId: 'migrations',
+          severity: 'likely',
+          title: `${tool} migration files changed since last-good (same count, different set)`,
+          detail: 'A migration was renamed or replaced. Check whether your local DB matches.',
+          fix: { title: `Review and apply ${tool} migrations`, command: MIGRATE_CMD[tool] ?? `apply ${tool} migrations` },
+        })
+      }
     }
   }
 
