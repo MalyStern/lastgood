@@ -1,0 +1,33 @@
+# Example lastgood.yml — commit this file. Machine-specific state lives in
+# .lastgood/ (auto-gitignored). `lastgood init` writes a copy of this for you.
+# Everything is optional; LastGood works with none of it.
+version: 1
+
+# The single source of truth for "the project works": exit 0 => auto-mark.
+# success_command: "npm test"
+run_on_success: true
+
+privacy:
+  store_env_values: false   # HARD DEFAULT — values are never read, regardless
+  cloud_sync: false         # local-only; no network calls, ever
+
+# Per-detector on/off. Missing = enabled.
+detectors:
+  git: { enabled: true }
+  lockfiles: { enabled: true }
+  runtimes: { enabled: true }
+  env_schema: { enabled: true }
+  docker: { enabled: true }
+  ports: { enabled: true }
+  migrations: { enabled: true, tools: [prisma, drizzle] }
+  schema: { enabled: true, hash: ["prisma/schema.prisma", "src/db/schema.ts"] }
+
+# Extra files to hash into the fingerprint (config, infra, generated code).
+watch_paths: []
+
+# Noise control.
+ignore: ["**/*.log", "tmp/**"]
+
+# `lastgood diff` exits non-zero at/above this level.
+diff:
+  fail_on: blocking   # blocking | likely | nice

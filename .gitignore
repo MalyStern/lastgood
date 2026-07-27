@@ -1,0 +1,8 @@
+node_modules/
+bin/
+*.tsbuildinfo
+lastgood-report.md
+.lastgood/
+.DS_Store
+*.log
+coverage/

@@ -1,0 +1,12 @@
+# The published package ships only what package.json "files" allowlists (bin/,
+# README, LICENSE). This file exists so npm does NOT fall back to .gitignore
+# (which ignores the built bin/ and would ship an empty package).
+src/
+test/
+.github/
+tsconfig.json
+lastgood.example.yml
+*.tsbuildinfo
+coverage/
+.gitignore
+.lastgood/

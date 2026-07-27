@@ -1,0 +1,65 @@
+{
+  "name": "lastgood",
+  "version": "0.1.0",
+  "description": "LastGood tells you exactly what changed since your project last worked on your machine. Mark a known-good state, then after a git pull or branch switch see what drifted — deps, migrations, env vars, runtime, services — with the exact commands to get running again. Local-first; nothing uploaded.",
+  "type": "module",
+  "bin": {
+    "lastgood": "bin/lastgood.mjs"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node18 --packages=external --outfile=bin/lastgood.mjs --banner:js=\"#!/usr/bin/env node\"",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "cli",
+    "developer-experience",
+    "git",
+    "environment",
+    "drift",
+    "continuity",
+    "onboarding",
+    "post-merge",
+    "migrations",
+    "dotenv",
+    "ai-context",
+    "local-first"
+  ],
+  "author": {
+    "name": "MalyStern"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MalyStern/lastgood.git"
+  },
+  "homepage": "https://github.com/MalyStern/lastgood#readme",
+  "bugs": {
+    "url": "https://github.com/MalyStern/lastgood/issues"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "execa": "^9.5.1",
+    "picocolors": "^1.1.1",
+    "semver": "^7.6.3",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/semver": "^7.5.8",
+    "esbuild": "^0.25.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
+  }
+}
