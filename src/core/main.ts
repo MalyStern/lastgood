@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { buildReport, captureCurrent, generateContext, mark, resolveConfig } from '../index.js'
 import { readFingerprint, readPark, writeContext, writePark } from './store.js'
 import { detectLang, makeTranslator, SUPPORTED_LANGS } from './i18n.js'
+import { installHooks, uninstallHooks } from './hooks.js'
 import { renderReport } from './report/tty.js'
 import { renderMarkdown } from './report/markdown.js'
 import { countBySeverity } from './report/tty.js'
@@ -100,6 +101,30 @@ export async function main(argv: string[]): Promise<void> {
     .description('run your success command; if it exits 0, auto-save a last-good snapshot')
     .argument('<cmd...>', 'the command to run, e.g. -- npm test')
     .action((cmd) => cmdRun(cmd))
+
+  program
+    .command('install-hooks')
+    .description('install git post-merge/post-checkout hooks that nudge you to run `lastgood morning` (never runs a fix)')
+    .action(async () => {
+      try {
+        console.log(await installHooks(cwd()))
+      } catch (e) {
+        console.error(`lastgood: ${e instanceof Error ? e.message : String(e)}`)
+        process.exit(3)
+      }
+    })
+
+  program
+    .command('uninstall-hooks')
+    .description('remove the LastGood git hooks')
+    .action(async () => {
+      try {
+        console.log(await uninstallHooks(cwd()))
+      } catch (e) {
+        console.error(`lastgood: ${e instanceof Error ? e.message : String(e)}`)
+        process.exit(3)
+      }
+    })
 
   program
     .command('langs')

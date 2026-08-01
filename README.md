@@ -113,6 +113,8 @@ lastgood diff             what changed since last-good  (alias: morning)
 lastgood context          write .lastgood/verified-context.md for an AI agent
 lastgood park             end-of-day capsule + a note to your future self (--note)
 lastgood resume           replay your park capsule and show what changed since
+lastgood install-hooks    git post-merge/post-checkout hooks that nudge you to run `morning`
+lastgood uninstall-hooks  remove those hooks
 lastgood langs            list UI languages
 
   --json          machine-readable output (diff)
@@ -173,9 +175,16 @@ Yes. It reads project files and runs read-only commands already on your machine.
 
 No tool combines the four things LastGood does: **(a)** a saved last-known-good local state, **(b)** a diff since then, **(c)** the exact prep-to-run after a pull, and **(d)** verified factual AI context. `git-pull-run` auto-runs a command after pull but is blind to *what* changed; `.env` diff tools only cover env; Nix/devcontainers *prevent* drift by pinning everything (a big commitment) rather than explaining an un-pinned repo. LastGood is the small thing you drop into any repo to answer "what changed since it worked?"
 
+## Git hooks (optional nudge)
+
+```bash
+lastgood install-hooks
+```
+
+installs `post-merge` and `post-checkout` hooks that, after a `git pull` or a branch switch, print **one line** reminding you to run `lastgood morning`. That's all they do — they never run a fix, never touch your database, never change anything; LastGood's rule is that *you* draw the conclusion. The block is wrapped in sentinel markers and **appended** to any hook you already have (Husky, lefthook, …), so nothing is clobbered, and `lastgood uninstall-hooks` removes only its own block. The nudge stays silent until you've saved a good state at least once.
+
 ## Roadmap
 
-- Git hooks (`post-merge` / `post-checkout`) that nudge you to run `morning`
 - More migration tools (Alembic/Flyway/Rails/Django, read-only status)
 - CI status of the branch via the GitHub CLI
 - Plugin detectors and a VS Code status-bar indicator
