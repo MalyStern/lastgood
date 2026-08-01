@@ -154,6 +154,15 @@ diff: { fail_on: blocking }
 
 `store_env_values: false` isn't just a default — LastGood has no code path that reads a `.env` value. It reads key names only.
 
+**Your settings are never silently ignored.** A Windows BOM is accepted; anything genuinely wrong — broken YAML or JSON, a misspelled setting, an unknown detector, an invalid `fail_on` — stops the run and says so, listing the valid values:
+
+```
+lastgood: unknown setting in lastgood.yml: success_comand
+Valid settings: success_command, run_on_success, watch_paths, ignore, detectors, diff, privacy
+```
+
+A config you *think* is applied but isn't is worse than no config at all — a mistyped `success_command` used to mean LastGood was never verifying anything, and nothing on screen said so.
+
 ## FAQ
 
 **Why did my project stop working after `git pull`?**

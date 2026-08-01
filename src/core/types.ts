@@ -96,3 +96,19 @@ export interface ResolvedConfig {
   /** Files whose hash is tracked (schema/generated). */
   schemaFiles: string[]
 }
+
+/** Every detector id you can switch off under `detectors:` in the config. Lives
+ * here (a leaf module) so config can validate against it; a test asserts it stays
+ * in step with what captureFingerprint actually consults. */
+export const DETECTOR_IDS = [
+  'git',
+  'lockfiles',
+  'runtimes',
+  'env_schema',
+  'docker',
+  'ports',
+  'migrations',
+  'schema',
+] as const
+
+export type DetectorId = (typeof DETECTOR_IDS)[number]

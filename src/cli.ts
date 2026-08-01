@@ -6,4 +6,16 @@ if (process.argv.includes('--no-color') || 'NO_COLOR' in process.env) {
 }
 
 const { main } = await import('./core/main.js')
-await main(process.argv)
+
+try {
+  await main(process.argv)
+} catch (e) {
+  // A settings problem is a sentence the user can act on. A stack trace aimed at
+  // someone who mistyped a key in a YAML file tells them nothing, and reads as a
+  // crash in the tool rather than a typo in their file.
+  if (e instanceof Error && e.name === 'ConfigError') {
+    console.error(`lastgood: ${e.message}`)
+    process.exit(3)
+  }
+  throw e
+}

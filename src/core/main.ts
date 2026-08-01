@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { buildReport, captureCurrent, generateContext, mark, resolveConfig } from '../index.js'
 import { readFingerprint, readPark, writeContext, writePark } from './store.js'
 import { detectLang, makeTranslator, SUPPORTED_LANGS } from './i18n.js'
+import { EXAMPLE_YML } from './example-config.js'
 import { installHooks, uninstallHooks } from './hooks.js'
 import { renderReport } from './report/tty.js'
 import { renderMarkdown } from './report/markdown.js'
@@ -16,33 +17,6 @@ import type { ChangeReport } from './types.js'
 
 export const VERSION = '0.1.0'
 
-const EXAMPLE_YML = `# lastgood.yml — commit this. Machine state lives in .lastgood/ (gitignored).
-version: 1
-
-# The single source of truth for "the project works": exit 0 => auto-mark.
-# success_command: "npm test"
-run_on_success: true
-
-privacy:
-  store_env_values: false   # HARD DEFAULT — values are never read, regardless
-  cloud_sync: false         # local-only; no network calls, ever
-
-detectors:
-  git: { enabled: true }
-  lockfiles: { enabled: true }
-  runtimes: { enabled: true }
-  env_schema: { enabled: true }
-  docker: { enabled: true }
-  ports: { enabled: true }
-  migrations: { enabled: true, tools: [prisma, drizzle] }
-  schema: { enabled: true, hash: ["prisma/schema.prisma", "src/db/schema.ts"] }
-
-watch_paths: []
-ignore: ["**/*.log", "tmp/**"]
-
-diff:
-  fail_on: blocking
-`
 
 export async function main(argv: string[]): Promise<void> {
   const program = new Command()

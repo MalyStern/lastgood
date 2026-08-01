@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { diffFingerprints } from '../src/core/diff.js'
 import { parseEnvKeys, capturePorts } from '../src/engine/capture.js'
-import { normalizeConfig } from '../src/core/config.js'
+import { loadConfig, normalizeConfig } from '../src/core/config.js'
+import { EXAMPLE_YML } from '../src/core/example-config.js'
+import { DETECTOR_IDS } from '../src/core/types.js'
 import { exitCodeFor, worstOf } from '../src/core/result.js'
 import { generateContext } from '../src/core/context.js'
 import { isValidFingerprint } from '../src/core/store.js'
@@ -250,5 +252,88 @@ describe('git hooks (pure block logic)', () => {
   it('leaves content untouched when there is no block to strip', () => {
     const content = '#!/bin/sh\necho hi\n'
     expect(stripHookBlock(content)).toBe(content)
+  })
+})
+
+describe('config: settings the user can actually see and trust', () => {
+  const tmp = (): string => mkdtempSync(join(tmpdir(), 'lg-cfg-'))
+
+  it('accepts the very file `lastgood init` writes', () => {
+    // A tool whose own starter config its own loader then rejects is the worst
+    // first impression available. This is the test that keeps the two in step.
+    const root = tmp()
+    writeFileSync(join(root, 'lastgood.yml'), EXAMPLE_YML)
+    const c = loadConfig(root)
+    expect(c.failOn).toBe('blocking')
+    expect(c.privacy.storeEnvValues).toBe(false)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('reports broken YAML instead of silently ignoring your settings', () => {
+    const root = tmp()
+    writeFileSync(join(root, 'lastgood.yml'), 'detectors:\n  git: true\n bad indent here: [')
+    expect(() => loadConfig(root)).toThrow(/not valid YAML/)
+    expect(() => loadConfig(root)).toThrow(/settings ignored/)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('reports broken JSON config too', () => {
+    const root = tmp()
+    writeFileSync(join(root, 'lastgood.config.json'), '{ "ignore": ["a" }')
+    expect(() => loadConfig(root)).toThrow(/not valid JSON/)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('reads a config saved by Notepad or PowerShell (UTF-8 BOM)', () => {
+    const root = tmp()
+    writeFileSync(join(root, 'lastgood.config.json'), '﻿{ "ignore": ["tmp/**"] }')
+    expect(loadConfig(root).ignore).toEqual(['tmp/**'])
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('catches a misspelled setting rather than dropping it in silence', () => {
+    const root = tmp()
+    // The whole point: normalizeConfig would quietly ignore this and the user
+    // would never learn their success command was never configured.
+    writeFileSync(join(root, 'lastgood.yml'), 'success_comand: npm test\n')
+    expect(() => loadConfig(root)).toThrow(/unknown setting/)
+    expect(() => loadConfig(root)).toThrow(/success_command/)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('catches a misspelled detector and lists the real ones', () => {
+    const root = tmp()
+    writeFileSync(join(root, 'lastgood.yml'), 'detectors:\n  lockfile: false\n')
+    expect(() => loadConfig(root)).toThrow(/unknown detector/)
+    expect(() => loadConfig(root)).toThrow(/lockfiles/)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('rejects a fail_on that is not a real level', () => {
+    const root = tmp()
+    writeFileSync(join(root, 'lastgood.yml'), 'diff:\n  fail_on: critical\n')
+    expect(() => loadConfig(root)).toThrow(/must be one of/)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('a valid config still applies', () => {
+    const root = tmp()
+    writeFileSync(join(root, 'lastgood.yml'), 'success_command: npm test\nignore: ["tmp/**"]\ndiff:\n  fail_on: nice\n')
+    const c = loadConfig(root)
+    expect(c.successCommand).toBe('npm test')
+    expect(c.ignore).toEqual(['tmp/**'])
+    expect(c.failOn).toBe('nice')
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('no config at all is still perfectly fine', () => {
+    const root = tmp()
+    expect(loadConfig(root).failOn).toBe('blocking')
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('every detector the capture engine consults is a valid config id', () => {
+    // Guards the other direction: a detector you can switch off must exist.
+    for (const id of DETECTOR_IDS) expect(EXAMPLE_YML).toContain(`${id}:`)
   })
 })
