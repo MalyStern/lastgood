@@ -6,14 +6,14 @@ import { execa } from 'execa'
 import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { buildReport, captureCurrent, generateContext, mark, resolveConfig } from '../index.js'
-import { readFingerprint, readPark, writeContext, writePark } from './store.js'
+import { DIR, readFingerprintResult, readPark, writeContext, writePark } from './store.js'
 import { detectLang, makeTranslator, SUPPORTED_LANGS } from './i18n.js'
 import { EXAMPLE_YML } from './example-config.js'
 import { installHooks, uninstallHooks } from './hooks.js'
 import { renderReport } from './report/tty.js'
 import { renderMarkdown } from './report/markdown.js'
 import { countBySeverity } from './report/tty.js'
-import type { ChangeReport } from './types.js'
+import type { Fingerprint } from './types.js'
 
 export const VERSION = '0.1.0'
 
@@ -141,21 +141,31 @@ async function cmdMark(opts: { note?: string; lang?: string }): Promise<void> {
   if (bits.length) console.log(`  ${bits.join(' · ')}`)
 }
 
-async function loadReport(config = resolveConfig(cwd())): Promise<ChangeReport | 'none'> {
-  const baseline = readFingerprint(cwd())
-  if (!baseline) return 'none'
-  const current = await captureCurrent(cwd(), config, { trigger: 'manual-mark' })
-  return buildReport(baseline, current, config)
+/** Read the last-good snapshot or exit with the RIGHT message: "you never marked"
+ * (exit 0, nothing to compare) is a different situation from "your snapshot exists
+ * but I can't use it" (exit 3, needs a re-mark). Both used to print the former. */
+function requireBaseline(tr: ReturnType<typeof makeTranslator>): Fingerprint {
+  const read = readFingerprintResult(cwd())
+  if (read.status === 'missing') {
+    console.log(`\n  ${tr.t('noFingerprint')}\n`)
+    process.exit(0)
+  }
+  if (read.status === 'unreadable') {
+    console.error(
+      `lastgood: your last-good snapshot at ${join(DIR, 'fingerprint.json')} could not be read — ${read.reason}.\n` +
+        'Run `lastgood mark` when the project works to recreate it.',
+    )
+    process.exit(3)
+  }
+  return read.fingerprint
 }
 
 async function cmdDiff(opts: { json?: boolean; report?: string | boolean; lang?: string; color?: boolean }): Promise<void> {
   const tr = makeTranslator(detectLang(opts.lang))
   const config = resolveConfig(cwd())
-  const report = await loadReport(config)
-  if (report === 'none') {
-    console.log(`\n  ${tr.t('noFingerprint')}\n`)
-    process.exit(0)
-  }
+  const baseline = requireBaseline(tr)
+  const current = await captureCurrent(cwd(), config, { trigger: 'manual-mark' })
+  const report = buildReport(baseline, current, config)
   if (opts.report) {
     const file = typeof opts.report === 'string' ? opts.report : 'lastgood-report.md'
     writeFileSync(file, renderMarkdown(report, cwd()), 'utf8')
@@ -172,11 +182,7 @@ async function cmdDiff(opts: { json?: boolean; report?: string | boolean; lang?:
 
 async function cmdContext(): Promise<void> {
   const config = resolveConfig(cwd())
-  const baseline = readFingerprint(cwd())
-  if (!baseline) {
-    console.log(`\n  ${makeTranslator(detectLang()).t('noFingerprint')}\n`)
-    process.exit(0)
-  }
+  const baseline = requireBaseline(makeTranslator(detectLang()))
   const current = await captureCurrent(cwd(), config, { trigger: 'manual-mark' })
   const findings = buildReport(baseline, current, config).findings
   const md = generateContext(baseline, current, findings)

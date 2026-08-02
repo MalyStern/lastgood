@@ -58,15 +58,34 @@ export function writeFingerprint(root: string, fp: Fingerprint): void {
   pruneHistory(hist, 20)
 }
 
-export function readFingerprint(root: string): Fingerprint | null {
+/** The three states a last-good read can be in. Collapsing the last two into a
+ * bare `null` is what let `morning` announce "No last-good state yet" (exit 0) to
+ * someone who HAD marked — their baseline silently discarded because the file was
+ * truncated or written by an older LastGood. That is precisely the drift LastGood
+ * exists to catch, so the caller must be able to tell the cases apart. */
+export type FingerprintRead =
+  | { status: 'ok'; fingerprint: Fingerprint }
+  | { status: 'missing' }
+  | { status: 'unreadable'; reason: string }
+
+export function readFingerprintResult(root: string): FingerprintRead {
   const p = fingerprintPath(root)
-  if (!existsSync(p)) return null
+  if (!existsSync(p)) return { status: 'missing' }
+  let parsed: unknown
   try {
-    const parsed = JSON.parse(readFileSync(p, 'utf8'))
-    return isValidFingerprint(parsed) ? parsed : null
+    parsed = JSON.parse(readFileSync(p, 'utf8'))
   } catch {
-    return null
+    return { status: 'unreadable', reason: 'it is not valid JSON (truncated or corrupt)' }
   }
+  if (!isValidFingerprint(parsed)) {
+    return { status: 'unreadable', reason: 'it is missing fields or was written by an older LastGood version' }
+  }
+  return { status: 'ok', fingerprint: parsed }
+}
+
+export function readFingerprint(root: string): Fingerprint | null {
+  const r = readFingerprintResult(root)
+  return r.status === 'ok' ? r.fingerprint : null
 }
 
 export function writeContext(root: string, markdown: string): string {

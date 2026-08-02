@@ -9,7 +9,7 @@ import { EXAMPLE_YML } from '../src/core/example-config.js'
 import { DETECTOR_IDS } from '../src/core/types.js'
 import { exitCodeFor, worstOf } from '../src/core/result.js'
 import { generateContext } from '../src/core/context.js'
-import { isValidFingerprint } from '../src/core/store.js'
+import { isValidFingerprint, readFingerprintResult, DIR } from '../src/core/store.js'
 import { detectLang, makeTranslator } from '../src/core/i18n.js'
 import {
   buildHookBlock,
@@ -77,6 +77,55 @@ describe('isValidFingerprint', () => {
     expect(isValidFingerprint(null)).toBe(false)
     expect(isValidFingerprint({ schemaVersion: 999, git: {} })).toBe(false)
     expect(isValidFingerprint(fp())).toBe(true)
+  })
+})
+
+describe('readFingerprintResult — a corrupt snapshot is not the same as "never marked"', () => {
+  const withStore = (fn: (root: string) => void): void => {
+    const root = mkdtempSync(join(tmpdir(), 'lg-fp-'))
+    try {
+      fn(root)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+  const writeFp = (root: string, body: string): void => {
+    mkdirSync(join(root, DIR), { recursive: true })
+    writeFileSync(join(root, DIR, 'fingerprint.json'), body)
+  }
+
+  it('reports missing when the user genuinely never marked', () => {
+    withStore((root) => expect(readFingerprintResult(root).status).toBe('missing'))
+  })
+
+  it('reports unreadable — NOT missing — for a truncated/corrupt file', () => {
+    // The exact failure: mark succeeded, then a crash/disk issue left half a file.
+    // If this read as "missing", `morning` says "no last-good state yet" and exits
+    // 0, throwing the baseline away with nothing on screen to explain it.
+    withStore((root) => {
+      writeFp(root, '{ "schemaVersion": 1, "tool": "lastg')
+      const r = readFingerprintResult(root)
+      expect(r.status).toBe('unreadable')
+      if (r.status === 'unreadable') expect(r.reason).toMatch(/corrupt|JSON/i)
+    })
+  })
+
+  it('reports unreadable for a snapshot from an older LastGood (schema mismatch)', () => {
+    withStore((root) => {
+      writeFp(root, JSON.stringify({ ...fp(), schemaVersion: 99 }))
+      const r = readFingerprintResult(root)
+      expect(r.status).toBe('unreadable')
+      if (r.status === 'unreadable') expect(r.reason).toMatch(/older LastGood/i)
+    })
+  })
+
+  it('returns ok with the parsed fingerprint for a valid snapshot', () => {
+    withStore((root) => {
+      writeFp(root, JSON.stringify(fp()))
+      const r = readFingerprintResult(root)
+      expect(r.status).toBe('ok')
+      if (r.status === 'ok') expect(r.fingerprint.tool).toBe('lastgood')
+    })
   })
 })
 
