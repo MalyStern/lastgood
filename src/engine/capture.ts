@@ -147,25 +147,157 @@ export function capturePorts(root: string): number[] {
   return [...ports].filter((p) => p > 0 && p < 65536).sort((a, b) => a - b)
 }
 
-function captureMigrations(root: string, tools: string[]): Record<string, MigrationSnapshot> {
+// A migration set is a fact we count on disk — never a DB query. The snapshot is
+// count + a hash of the sorted filenames, so `diff` can tell "one was added" from
+// "one was renamed" (same count, different hash) without ever connecting anywhere.
+// Detection mirrors what each ecosystem actually ships:
+//   prisma  — folders under prisma/migrations/
+//   drizzle — .sql files under drizzle/
+//   rails   — .rb files under db/migrate/
+//   alembic — revision .py files under the versions/ dir
+//   flyway  — V/U/R__*.sql files under the conventional migration dir
+//   django  — .py migrations across every app's migrations/ package
+export function captureMigrations(root: string, tools: string[]): Record<string, MigrationSnapshot> {
   const out: Record<string, MigrationSnapshot> = {}
+
   if (tools.includes('prisma')) {
     const dir = join(root, 'prisma', 'migrations')
-    const entries = readdirSafe(dir).filter((e) => {
-      try {
-        return statSync(join(dir, e)).isDirectory()
-      } catch {
-        return false
-      }
-    })
-    if (existsSync(dir)) out.prisma = snap(entries)
+    if (existsSync(dir)) out.prisma = snap(readdirSafe(dir).filter((e) => isDirAt(join(dir, e))))
   }
+
   if (tools.includes('drizzle')) {
     const dir = join(root, 'drizzle')
-    const sql = readdirSafe(dir).filter((e) => e.endsWith('.sql'))
-    if (existsSync(dir)) out.drizzle = snap(sql)
+    if (existsSync(dir)) out.drizzle = snap(readdirSafe(dir).filter((e) => e.endsWith('.sql')))
   }
+
+  if (tools.includes('rails')) {
+    const dir = join(root, 'db', 'migrate')
+    if (existsSync(dir)) out.rails = snap(readdirSafe(dir).filter((e) => e.endsWith('.rb')))
+  }
+
+  if (tools.includes('alembic')) {
+    const versions = findAlembicVersionsDir(root)
+    if (versions) out.alembic = snap(readdirSafe(versions).filter(isRevisionPy))
+  }
+
+  if (tools.includes('flyway')) {
+    const dir = findFlywayDir(root)
+    if (dir) out.flyway = snap(readdirSafe(dir).filter((e) => FLYWAY_SQL.test(e)))
+  }
+
+  if (tools.includes('django')) {
+    const dirs = findDjangoMigrationDirs(root)
+    if (dirs.length > 0) {
+      // Qualify each filename with its app dir: two apps can both ship 0001_initial.py,
+      // and the hash must treat them as distinct entries.
+      const names: string[] = []
+      for (const d of dirs) {
+        for (const e of readdirSafe(d.abs).filter(isRevisionPy)) names.push(`${d.rel}/${e}`)
+      }
+      out.django = snap(names)
+    }
+  }
+
   return out
+}
+
+const isDirAt = (p: string): boolean => {
+  try {
+    return statSync(p).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+/** A revision file, not the package marker Python migration dirs carry. */
+const isRevisionPy = (name: string): boolean => name.endsWith('.py') && name !== '__init__.py'
+
+// Flyway's default naming: versioned V<version>__desc.sql, undo U<version>__desc.sql,
+// repeatable R__desc.sql. Distinctive enough that a stray .sql file isn't counted.
+const FLYWAY_SQL = /^(?:[VU][^_]+|R)__.+\.sql$/
+
+// Alembic's script_location is configurable in alembic.ini; revisions always live in
+// a versions/ child of it. Honour the ini (an INI string, never imported/executed),
+// then fall back to the conventional layouts.
+function findAlembicVersionsDir(root: string): string | null {
+  const rels: string[] = []
+  const ini = join(root, 'alembic.ini')
+  if (existsSync(ini)) {
+    const text = read(ini)
+    const line = text
+      ?.split(/\r?\n/)
+      .map((l) => l.trim())
+      .find((l) => /^script_location\s*=/.test(l))
+    const loc = line?.split('=')[1]?.trim().replace(/\\/g, '/').replace(/\/+$/, '')
+    if (loc) rels.push(`${loc}/versions`)
+  }
+  for (const d of ['alembic', 'migrations', 'db/migrations', 'db', 'migration', 'src/migrations']) {
+    rels.push(`${d}/versions`)
+  }
+  for (const rel of [...new Set(rels)]) {
+    const abs = join(root, ...rel.split('/'))
+    if (existsSync(abs) && isDirAt(abs)) return abs
+  }
+  return null
+}
+
+// Flyway has no single canonical dir; take the first conventional one that actually
+// holds Flyway-named SQL, so a random sql/ folder of ad-hoc scripts isn't counted.
+function findFlywayDir(root: string): string | null {
+  const candidates = [
+    'src/main/resources/db/migration',
+    'src/main/resources/db/migrations',
+    'db/migration',
+    'db/migrations',
+    'database/migrations',
+    'migrations',
+    'sql',
+  ]
+  for (const rel of candidates) {
+    const abs = join(root, ...rel.split('/'))
+    if (existsSync(abs) && isDirAt(abs) && readdirSafe(abs).some((e) => FLYWAY_SQL.test(e))) return abs
+  }
+  return null
+}
+
+// Django keeps migrations per app in a migrations/ package (carrying __init__.py —
+// what distinguishes it from an Alembic/Flyway `migrations` folder). Only look when
+// manage.py marks a Django project, and bound the walk: skip virtualenvs / vendored
+// trees (whose installed packages carry their OWN migrations) and never follow
+// symlinks, so this stays cheap and loop-free.
+const WALK_SKIP = new Set([
+  'node_modules', '.git', '.venv', 'venv', 'env', '__pycache__', 'site-packages',
+  '.tox', 'dist', 'build', '.mypy_cache', '.pytest_cache', '.idea', '.vscode',
+])
+
+function findDjangoMigrationDirs(root: string): { abs: string; rel: string }[] {
+  if (!existsSync(join(root, 'manage.py'))) return []
+  const out: { abs: string; rel: string }[] = []
+  const walk = (absDir: string, relDir: string, depth: number): void => {
+    if (depth > 6) return
+    let entries: import('node:fs').Dirent[]
+    try {
+      entries = readdirSync(absDir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      // isDirectory() is false for a symlink Dirent (readdir doesn't follow) — so this
+      // also excludes symlinked dirs, ruling out cycles.
+      if (!e.isDirectory()) continue
+      if (WALK_SKIP.has(e.name) || e.name.startsWith('.')) continue
+      const childAbs = join(absDir, e.name)
+      const childRel = relDir ? `${relDir}/${e.name}` : e.name
+      if (e.name === 'migrations' && existsSync(join(childAbs, '__init__.py'))) {
+        out.push({ abs: childAbs, rel: childRel })
+        continue // a migrations package doesn't nest another
+      }
+      walk(childAbs, childRel, depth + 1)
+    }
+  }
+  walk(root, '', 0)
+  // Stable order so the qualified-name hash is deterministic across runs.
+  return out.sort((a, b) => a.rel.localeCompare(b.rel))
 }
 
 const snap = (names: string[]): MigrationSnapshot => {

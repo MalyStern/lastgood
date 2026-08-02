@@ -26,6 +26,10 @@ const INSTALL_FOR_LOCK: Record<string, string> = {
 const MIGRATE_CMD: Record<string, string> = {
   prisma: 'npx prisma migrate dev',
   drizzle: 'npx drizzle-kit migrate',
+  alembic: 'alembic upgrade head',
+  flyway: 'flyway migrate',
+  rails: 'bin/rails db:migrate',
+  django: 'python manage.py migrate',
 }
 
 const RUNTIME_SWITCH: Record<Runtime, (v: string) => string> = {

@@ -18,7 +18,7 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
   watchPaths: [],
   ignore: [],
   failOn: 'blocking',
-  migrationTools: ['prisma', 'drizzle'],
+  migrationTools: ['prisma', 'drizzle', 'alembic', 'flyway', 'rails', 'django'],
   schemaFiles: ['prisma/schema.prisma', 'src/db/schema.ts', 'drizzle/schema.ts'],
 }
 

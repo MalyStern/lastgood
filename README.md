@@ -74,7 +74,7 @@ When you `mark`, LastGood saves a small, **local-only** fingerprint (in `.lastgo
 - Installed runtime versions (Node/Python/Java/.NET/Go/Ruby)
 - The **names** of env vars your project documents (`.env.example`) — **never the values**
 - Docker-compose services and declared ports
-- Migration file counts (Prisma/Drizzle) — on disk, the DB is never touched
+- Migration file counts (Prisma, Drizzle, Alembic, Flyway, Rails, Django) — on disk, the DB is never touched
 - Hashes of schema / generated files and any paths you add to `watch_paths`
 - The command that defined "working" and how it exited
 
@@ -144,7 +144,7 @@ detectors:
   env_schema: { enabled: true }
   docker: { enabled: true }
   ports: { enabled: true }
-  migrations: { enabled: true, tools: [prisma, drizzle] }
+  migrations: { enabled: true, tools: [prisma, drizzle, alembic, flyway, rails, django] }
   schema: { enabled: true, hash: ["prisma/schema.prisma", "src/db/schema.ts"] }
 
 watch_paths: []
@@ -194,7 +194,7 @@ installs `post-merge` and `post-checkout` hooks that, after a `git pull` or a br
 
 ## Roadmap
 
-- More migration tools (Alembic/Flyway/Rails/Django, read-only status)
+- Migration tracking now spans Prisma, Drizzle, Alembic, Flyway, Rails and Django (on-disk counts, read-only status) — shipped
 - CI status of the branch via the GitHub CLI
 - Plugin detectors and a VS Code status-bar indicator
 

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { diffFingerprints } from '../src/core/diff.js'
-import { parseEnvKeys, capturePorts } from '../src/engine/capture.js'
+import { parseEnvKeys, capturePorts, captureMigrations } from '../src/engine/capture.js'
 import { loadConfig, normalizeConfig } from '../src/core/config.js'
 import { EXAMPLE_YML } from '../src/core/example-config.js'
 import { DETECTOR_IDS } from '../src/core/types.js'
@@ -132,6 +132,20 @@ describe('diffFingerprints', () => {
     expect(m.fix?.command).toBe('npx prisma migrate dev')
   })
 
+  it('hands the right apply command for a newly-added migration per tool', () => {
+    const added = (tool: string): string | undefined => {
+      const f = diffFingerprints(
+        fp({ migrations: { [tool]: { files: 1, filesHash: 'a' } } }),
+        fp({ migrations: { [tool]: { files: 2, filesHash: 'b' } } }),
+      )
+      return f.find((x) => x.detectorId === 'migrations')?.fix?.command
+    }
+    expect(added('rails')).toBe('bin/rails db:migrate')
+    expect(added('django')).toBe('python manage.py migrate')
+    expect(added('alembic')).toBe('alembic upgrade head')
+    expect(added('flyway')).toBe('flyway migrate')
+  })
+
   it('flags a changed schema file as likely and a new docker service as likely', () => {
     const schema = diffFingerprints(fp({ fileHashes: { 'schema.prisma': 'a' } }), fp({ fileHashes: { 'schema.prisma': 'b' } }))
     expect(schema.find((x) => x.detectorId === 'schema')?.severity).toBe('likely')
@@ -143,6 +157,81 @@ describe('diffFingerprints', () => {
     const moved = diffFingerprints(fp({ git: { commit: 'a'.repeat(40), branch: 'main', dirty: false, changedCount: 0 } }), fp({ git: { commit: 'b'.repeat(40), branch: 'main', dirty: false, changedCount: 0 } }))
     expect(moved.find((x) => x.detectorId === 'git')?.severity).toBe('nice')
     expect(diffFingerprints(fp(), fp())).toEqual([])
+  })
+})
+
+describe('captureMigrations (filesystem tier — never touches a DB)', () => {
+  const withDir = (fn: (dir: string) => void): void => {
+    const dir = mkdtempSync(join(tmpdir(), 'lg-mig-'))
+    try {
+      fn(dir)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+  const mk = (dir: string, rel: string, body = ''): void => {
+    const abs = join(dir, ...rel.split('/'))
+    mkdirSync(dirname(abs), { recursive: true })
+    writeFileSync(abs, body)
+  }
+
+  it('counts Rails db/migrate/*.rb and hashes the filename set', () => {
+    withDir((dir) => {
+      mk(dir, 'db/migrate/20260101_a.rb', 'x')
+      mk(dir, 'db/migrate/20260102_b.rb', 'x')
+      mk(dir, 'db/migrate/.keep')
+      const snap = captureMigrations(dir, ['rails']).rails
+      expect(snap?.files).toBe(2)
+      expect(snap?.filesHash).toMatch(/^[0-9a-f]{64}$/)
+    })
+  })
+
+  it('counts Alembic revisions under a custom script_location and skips __init__.py', () => {
+    withDir((dir) => {
+      mk(dir, 'alembic.ini', '[alembic]\nscript_location = db/migrations\n')
+      mk(dir, 'db/migrations/versions/r1.py', 'x')
+      mk(dir, 'db/migrations/versions/r2.py', 'x')
+      mk(dir, 'db/migrations/versions/__init__.py', '')
+      expect(captureMigrations(dir, ['alembic']).alembic?.files).toBe(2)
+    })
+  })
+
+  it('counts Flyway V/U/R__*.sql and ignores ad-hoc .sql', () => {
+    withDir((dir) => {
+      mk(dir, 'sql/V1__init.sql', 'x')
+      mk(dir, 'sql/R__view.sql', 'x')
+      mk(dir, 'sql/notes.sql', 'x')
+      expect(captureMigrations(dir, ['flyway']).flyway?.files).toBe(2)
+    })
+  })
+
+  it('counts Django migrations across apps (manage.py required), skipping venvs', () => {
+    withDir((dir) => {
+      mk(dir, 'manage.py', '#!/usr/bin/env python\n')
+      mk(dir, 'users/migrations/__init__.py')
+      mk(dir, 'users/migrations/0001_initial.py')
+      mk(dir, 'orders/migrations/__init__.py')
+      mk(dir, 'orders/migrations/0001_initial.py')
+      mk(dir, 'orders/migrations/0002_status.py')
+      mk(dir, '.venv/pkg/migrations/__init__.py')
+      mk(dir, '.venv/pkg/migrations/0001_vendored.py')
+      expect(captureMigrations(dir, ['django']).django?.files).toBe(3)
+    })
+  })
+
+  it('does not report Django without a manage.py marker', () => {
+    withDir((dir) => {
+      mk(dir, 'app/migrations/__init__.py')
+      mk(dir, 'app/migrations/0001_initial.py')
+      expect(captureMigrations(dir, ['django']).django).toBeUndefined()
+    })
+  })
+
+  it('respects the tools list — an unlisted tool is not captured', () => {
+    withDir((dir) => {
+      mk(dir, 'db/migrate/20260101_a.rb', 'x')
+      expect(captureMigrations(dir, ['prisma']).rails).toBeUndefined()
+    })
   })
 })
 

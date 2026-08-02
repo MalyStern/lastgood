@@ -22,7 +22,7 @@ detectors:
   env_schema: { enabled: true }
   docker: { enabled: true }
   ports: { enabled: true }
-  migrations: { enabled: true, tools: [prisma, drizzle] }
+  migrations: { enabled: true, tools: [prisma, drizzle, alembic, flyway, rails, django] }
   schema: { enabled: true, hash: ["prisma/schema.prisma", "src/db/schema.ts"] }
 
 watch_paths: []
